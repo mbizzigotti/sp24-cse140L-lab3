@@ -36,6 +36,12 @@ module traffic_light_controller(
 	int     ctr5, next_ctr5,       //  5 sec timeout when my traffic goes away
 			ctr10, next_ctr10;     // 10 sec limit when other traffic presents
 
+  logic      ctr5en,      ctr10en;
+  logic next_ctr5en, next_ctr10en;
+
+  logic change_light;
+  assign change_light = (next_ctr5 >= 5) || (next_ctr10 >= 10);
+
 // sequential part of our state machine (register between C1 and C2 in Harris & Harris Moore machine diagram
 // combinational part will reset or increment the counters and figure out the next_state
   always_ff @(posedge clk)
@@ -43,11 +49,15 @@ module traffic_light_controller(
 	  present_state <= RRRRH;
 	  ctr5          <= 'd0;
 	  ctr10         <= 'd0;
+      ctr5en        <= 0;
+      ctr10en       <= 0;
 	end  
 	else begin
 	  present_state <= next_state;
 	  ctr5          <= next_ctr5;
 	  ctr10         <= next_ctr10;
+      ctr5en        <= next_ctr5en;
+      ctr10en       <= next_ctr10en;
 	end  
 
 // combinational part of state machine ("C1" block in the Harris & Harris Moore machine diagram)
@@ -56,26 +66,124 @@ module traffic_light_controller(
 	next_state = RRRRH;                            // default to reset state
 	next_ctr5  = 'd0; 							   // default: reset counters
 	next_ctr10 = 'd0;
-	case(present_state)
-/* ************* Fill in the case statements ************** */
-	  GRRRR: begin /* fill in the guts
-			   build on part 1
-			   round-robin priority for four other direcions
-                */
-	         end      
-	  RGRRR: begin 		                                 // EL+ES green
-              // ** fill in the guts **
-	         end
+    next_ctr5en  = 0;
+    next_ctr10en = 0;
+	case (present_state)
+
+	// ***** GREEN *********************************
+	GRRRR: begin
+		next_ctr5en  = ctr5en  || (!s);
+		next_ctr10en = ctr10en || (sb);
+		next_ctr5  = next_ctr5en  ? ctr5  + 1 : ctr5;
+		next_ctr10 = next_ctr10en ? ctr10 + 1 : ctr10;
+
+		if ((next_ctr5 >= 5) || (next_ctr10 >= 10)) begin
+			next_state = YRRRR;
+			next_ctr5 = 0;
+			next_ctr10 = 0;
+		end else next_state = GRRRR;
+	end
+	RGRRR: begin
+		next_ctr5en  = ctr5en  || (!e);
+		next_ctr10en = ctr10en || (eb);
+		next_ctr5  = next_ctr5en  ? ctr5  + 1 : ctr5;
+		next_ctr10 = next_ctr10en ? ctr10 + 1 : ctr10;
+
+		if ((next_ctr5 >= 5) || (next_ctr10 >= 10)) begin
+			next_state = RYRRR;
+			next_ctr5 = 0;
+			next_ctr10 = 0;
+		end else next_state = RGRRR;
+	end
+	RRGRR: begin
+		next_ctr5en  = ctr5en  || (!w);
+		next_ctr10en = ctr10en || (wb);
+		next_ctr5  = next_ctr5en  ? ctr5  + 1 : ctr5;
+		next_ctr10 = next_ctr10en ? ctr10 + 1 : ctr10;
+
+		if ((next_ctr5 >= 5) || (next_ctr10 >= 10)) begin
+			next_state = RRYRR;
+			next_ctr5 = 0;
+			next_ctr10 = 0;
+		end else next_state = RRGRR;
+	end
+	RRRGR: begin
+		next_ctr5en  = ctr5en  || (!l);
+		next_ctr10en = ctr10en || (lb);
+		next_ctr5  = next_ctr5en  ? ctr5  + 1 : ctr5;
+		next_ctr10 = next_ctr10en ? ctr10 + 1 : ctr10;
+
+		if ((next_ctr5 >= 5) || (next_ctr10 >= 10)) begin
+			next_state = RRRYR;
+			next_ctr5 = 0;
+			next_ctr10 = 0;
+		end else next_state = RRRGR;
+	end
+	RRRRG: begin
+		next_ctr5en  = ctr5en  || (!n);
+		next_ctr10en = ctr10en || (nb);
+		next_ctr5  = next_ctr5en  ? ctr5  + 1 : ctr5;
+		next_ctr10 = next_ctr10en ? ctr10 + 1 : ctr10;
+
+		if ((next_ctr5 >= 5) || (next_ctr10 >= 10)) begin
+			next_state = RRRRY;
+			next_ctr5 = 0;
+			next_ctr10 = 0;
+		end else next_state = RRRRG;
+	end
+
+	// ***** YELLOW *********************************
+	  YRRRR: next_state = ZRRRR;
+	  ZRRRR: next_state = HRRRR;
+
 	  RYRRR: next_state = RZRRR;
 	  RZRRR: next_state = RHRRR;
-	  RHRRR: begin
-             // ** fill in the guts **
-      end
 
-	  RRGRR: begin 
-	        // ** fill in the guts, etc **
-	  end
-      // ** fill in the guts to complete 5 sets of R Y Z H progressions **
+	  RRYRR: next_state = RRZRR;
+	  RRZRR: next_state = RRHRR;
+
+	  RRRYR: next_state = RRRZR;
+	  RRRZR: next_state = RRRHR;
+
+	  RRRRY: next_state = RRRRZ;
+	  RRRRZ: next_state = RRRRH;
+
+	// ***** RED *********************************
+    HRRRR:
+           if (e) next_state = RGRRR;
+      else if (w) next_state = RRGRR;
+      else if (l) next_state = RRRGR;
+      else if (n) next_state = RRRRG;
+	  else if (s) next_state = GRRRR;
+      else        next_state = RRRRH;
+    RHRRR:
+           if (w) next_state = RRGRR;
+      else if (l) next_state = RRRGR;
+      else if (n) next_state = RRRRG;
+	  else if (s) next_state = GRRRR;
+	  else if (e) next_state = RGRRR;
+      else        next_state = RRRRH;
+    RRHRR:
+           if (l) next_state = RRRGR;
+      else if (n) next_state = RRRRG;
+	  else if (s) next_state = GRRRR;
+	  else if (e) next_state = RGRRR;
+      else if (w) next_state = RRGRR;
+      else        next_state = RRRRH;
+    RRRHR:
+           if (n) next_state = RRRRG;
+	  else if (s) next_state = GRRRR;
+	  else if (e) next_state = RGRRR;
+      else if (w) next_state = RRGRR;
+      else if (l) next_state = RRRGR;
+      else        next_state = RRRRH;
+    RRRRH:
+           if (s) next_state = GRRRR;
+      else if (e) next_state = RGRRR;
+      else if (w) next_state = RRGRR;
+      else if (l) next_state = RRRGR;
+      else if (n) next_state = RRRRG;
+      else        next_state = RRRRH;
     endcase
   end
 
@@ -87,10 +195,44 @@ module traffic_light_controller(
 	  w_left_light = red;
 	  ns_light     = red;
 	  case(present_state)      // Moore machine
-		GRRRR:   begin e_str_light = green;
-					   w_str_light = green;
+		GRRRR: begin
+			e_str_light = green;
+			w_str_light = green;
 		end
-      // ** fill in the guts for all 5 directions -- just the greens and yellows **
+		YRRRR,ZRRRR: begin
+			e_str_light = yellow;
+			w_str_light = yellow;
+		end
+		RGRRR: begin
+			e_left_light = green;
+			e_str_light  = green;
+		end
+		RYRRR,RZRRR: begin
+			e_left_light = yellow;
+			e_str_light  = yellow;
+		end
+		RRGRR: begin
+			w_left_light = green;
+			w_str_light  = green;
+		end
+		RRYRR,RRZRR: begin
+			w_left_light = yellow;
+			w_str_light  = yellow;
+		end
+		RRRGR: begin
+			e_left_light = green;
+			w_left_light = green;
+		end
+		RRRYR,RRRZR: begin
+			e_left_light = yellow;
+			w_left_light = yellow;
+		end
+		RRRRG: begin
+			ns_light = green;
+		end
+		RRRRY,RRRRZ: begin
+			ns_light = yellow;
+		end
 	  endcase
 	end
 
