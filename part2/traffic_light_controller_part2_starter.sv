@@ -91,6 +91,7 @@ module traffic_light_controller(
 					   w_str_light = green;
 		end
       // ** fill in the guts for all 5 directions -- just the greens and yellows **
+	  endcase
 	end
 
 endmodule
