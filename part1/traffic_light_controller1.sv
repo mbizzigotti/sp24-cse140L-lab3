@@ -7,10 +7,10 @@
 import light_package ::*;           // defines red, yellow, green
 
 // same as Harris & Harris 4-state, but we have added two all-reds
-module traffic_light_controller1(
+module traffic_light_controller(
   input  clk, reset, 
          s_s, l_s, n_s,  // traffic sensors, east-west straight, east-west left, north-south 
-  output colors ew_str_light, ew_left_light, ns_light);    // traffic lights, east-west straight, east-west left, north-south
+  output colors str_light, left_light, ns_light);    // traffic lights, east-west straight, east-west left, north-south
 
 // HRR = red-red following YRR; RRH = red-red following RRY;
 // ZRR = 2nd cycle yellow, follows YRR, etc. 
@@ -22,7 +22,7 @@ module traffic_light_controller1(
           ctr10, next_ctr10;     // 10 sec limit when other traffic presents
 
   logic      ctr5en,      ctr10en;
-  //logic next_ctr5en, next_ctr10en;
+  logic next_ctr5en, next_ctr10en;
 
 
 // sequential part of our state machine (register between C1 and C2 in Harris & Harris Moore machine diagram
@@ -32,56 +32,61 @@ module traffic_light_controller1(
 	    present_state <= RRH;
       ctr5          <= 0;
       ctr10         <= 0;
+      ctr5en        <= 0;
+      ctr10en       <= 0;
     end  
 	else begin
 	    present_state <= next_state;
       ctr5          <= next_ctr5;
       ctr10         <= next_ctr10;
-    end  
+      ctr5en        <= next_ctr5en;
+      ctr10en       <= next_ctr10en;
+    end
 
 // combinational part of state machine ("C1" block in the Harris & Harris Moore machine diagram)
 // default needed because only 6 of 8 possible states are defined/used
   always_comb begin
-    next_state = RRH;            // default to reset state
-    next_ctr5  = 0; 	         // default to clearing counters
-    next_ctr10 = 0;
-
-    case(present_state)
+    next_state   = HRR;            // default to reset state
+    next_ctr5    = 0; 	         // default to clearing counters
+    next_ctr10   = 0;
+    next_ctr5en  = 0;
+    next_ctr10en = 0;
+    case (present_state)
     // --  Green States --
 	  GRR: begin 
-      ctr5en  = ctr5en  || (!s_s);
-      ctr10en = ctr10en || (l_s || n_s);
+      next_ctr5en  = ctr5en  || (!s_s);
+      next_ctr10en = ctr10en || (l_s || n_s);
 
-      next_ctr5  = ctr5en  ? ctr5  + 1 : ctr5;
-      next_ctr10 = ctr10en ? ctr10 + 1 : ctr10;
+      next_ctr5  = next_ctr5en  ? ctr5  + 1 : ctr5;
+      next_ctr10 = next_ctr10en ? ctr10 + 1 : ctr10;
 
-      if ((ctr5 > 5) || (ctr10 > 10)) begin
+      if ((next_ctr5 >= 5) || (next_ctr10 >= 10)) begin
         next_state = YRR;
         next_ctr5  = 0;
         next_ctr10 = 0;
       end else next_state = GRR;
     end
 	  RGR: begin
-      ctr5en  = ctr5en  || (!l_s);
-      ctr10en = ctr10en || (s_s || n_s);
+      next_ctr5en  = ctr5en  || (!l_s);
+      next_ctr10en = ctr10en || (s_s || n_s);
 
-      next_ctr5  = ctr5en  ? ctr5  + 1 : ctr5;
-      next_ctr10 = ctr10en ? ctr10 + 1 : ctr10;
+      next_ctr5  = next_ctr5en  ? ctr5  + 1 : ctr5;
+      next_ctr10 = next_ctr10en ? ctr10 + 1 : ctr10;
 
-      if ((ctr5 > 5) || (ctr10 > 10)) begin
+      if ((next_ctr5 >= 5) || (next_ctr10 >= 10)) begin
         next_state = RYR;
         next_ctr5  = 0;
         next_ctr10 = 0;
-      end else next_state = RYR;
+      end else next_state = RGR;
     end
 	  RRG: begin
-      ctr5en  = ctr5en  || (!n_s);
-      ctr10en = ctr10en || (s_s || l_s);
+      next_ctr5en  = ctr5en  || (!n_s);
+      next_ctr10en = ctr10en || (s_s || l_s);
 
-      next_ctr5  = ctr5en  ? ctr5  + 1 : ctr5;
-      next_ctr10 = ctr10en ? ctr10 + 1 : ctr10;
+      next_ctr5  = next_ctr5en  ? ctr5  + 1 : ctr5;
+      next_ctr10 = next_ctr10en ? ctr10 + 1 : ctr10;
 
-      if ((ctr5 > 5) || (ctr10 > 10)) begin
+      if ((next_ctr5 >= 5) || (next_ctr10 >= 10)) begin
         next_state = RRY;
         next_ctr5  = 0;
         next_ctr10 = 0;
@@ -99,7 +104,7 @@ module traffic_light_controller1(
     RRY: next_state = RRZ;
     RRZ: next_state = RRH;
     // -------------------
-    `
+    
     // --   Red  States --
     HRR:
            if (l_s) next_state = RGR;
@@ -107,8 +112,8 @@ module traffic_light_controller1(
       else if (s_s) next_state = GRR;
       else          next_state = HRR;
     RHR:
-           if (s_s) next_state = GRR;
-      else if (n_s) next_state = RRG;
+           if (n_s) next_state = RRG;
+      else if (s_s) next_state = GRR;
       else if (l_s) next_state = RGR;
       else          next_state = RHR;
     RRH:
