@@ -21,16 +21,20 @@ module traffic_light_controller1(
   int     ctr5, next_ctr5,       //  5 sec timeout when my traffic goes away
           ctr10, next_ctr10;     // 10 sec limit when other traffic presents
 
+  logic      ctr5en,      ctr10en;
+  //logic next_ctr5en, next_ctr10en;
+
+
 // sequential part of our state machine (register between C1 and C2 in Harris & Harris Moore machine diagram
 // combinational part will reset or increment the counters and figure out the next_state
   always_ff @(posedge clk)
     if(reset) begin
-	  present_state <= RRH;
+	    present_state <= RRH;
       ctr5          <= 0;
       ctr10         <= 0;
     end  
 	else begin
-	  present_state <= next_state;
+	    present_state <= next_state;
       ctr5          <= next_ctr5;
       ctr10         <= next_ctr10;
     end  
@@ -41,28 +45,93 @@ module traffic_light_controller1(
     next_state = RRH;            // default to reset state
     next_ctr5  = 0; 	         // default to clearing counters
     next_ctr10 = 0;
+
     case(present_state)
-/* ************* Fill in the case statements ************** */
+    // --  Green States --
 	  GRR: begin 
-         // when is next_state GRR? YRR?
-         // what does ctr5 do? ctr10?
-      end  
-     // etc. 
+      ctr5en  = ctr5en  || (!s_s);
+      ctr10en = ctr10en || (l_s || n_s);
+
+      next_ctr5  = ctr5en  ? ctr5  + 1 : ctr5;
+      next_ctr10 = ctr10en ? ctr10 + 1 : ctr10;
+
+      if ((ctr5 > 5) || (ctr10 > 10)) begin
+        next_state = YRR;
+        next_ctr5  = 0;
+        next_ctr10 = 0;
+      end else next_state = GRR;
+    end
+	  RGR: begin
+      ctr5en  = ctr5en  || (!l_s);
+      ctr10en = ctr10en || (s_s || n_s);
+
+      next_ctr5  = ctr5en  ? ctr5  + 1 : ctr5;
+      next_ctr10 = ctr10en ? ctr10 + 1 : ctr10;
+
+      if ((ctr5 > 5) || (ctr10 > 10)) begin
+        next_state = RYR;
+        next_ctr5  = 0;
+        next_ctr10 = 0;
+      end else next_state = RYR;
+    end
+	  RRG: begin
+      ctr5en  = ctr5en  || (!n_s);
+      ctr10en = ctr10en || (s_s || l_s);
+
+      next_ctr5  = ctr5en  ? ctr5  + 1 : ctr5;
+      next_ctr10 = ctr10en ? ctr10 + 1 : ctr10;
+
+      if ((ctr5 > 5) || (ctr10 > 10)) begin
+        next_state = RRY;
+        next_ctr5  = 0;
+        next_ctr10 = 0;
+      end else next_state = RRG;
+    end
+    // -------------------
+
+    // -- Yellow States --
+    YRR: next_state = ZRR;
+    ZRR: next_state = HRR;
+
+    RYR: next_state = RZR;
+    RZR: next_state = RHR;
+
+    RRY: next_state = RRZ;
+    RRZ: next_state = RRH;
+    // -------------------
+    `
+    // --   Red  States --
+    HRR:
+           if (l_s) next_state = RGR;
+      else if (n_s) next_state = RRG;
+      else if (s_s) next_state = GRR;
+      else          next_state = HRR;
+    RHR:
+           if (s_s) next_state = GRR;
+      else if (n_s) next_state = RRG;
+      else if (l_s) next_state = RGR;
+      else          next_state = RHR;
+    RRH:
+           if (s_s) next_state = GRR;
+      else if (l_s) next_state = RGR;
+      else if (n_s) next_state = RRG;
+      else          next_state = RRH;
+    // -------------------
     endcase
   end
 
 // combination output driver  ("C2" block in the Harris & Harris Moore machine diagram)
   always_comb begin
     str_light  = red;      // cover all red plus undefined cases
-	left_light = red;	   // default to red, then call out exceptions in case
-	ns_light   = red;
+	  left_light = red;	   // default to red, then call out exceptions in case
+	  ns_light   = red;
     case(present_state)    // Moore machine
       GRR:     str_light  = green;
-	  YRR,ZRR: str_light  = yellow;  // my dual yellow states -- brute force way to make yellow last 2 cycles
-	  RGR:     left_light = green;
-	  RYR,RZR: left_light = yellow;
-	  RRG:     ns_light   = green;
-	  RRY,RRZ: ns_light   = yellow;
+	    YRR,ZRR: str_light  = yellow;  // my dual yellow states -- brute force way to make yellow last 2 cycles
+	    RGR:     left_light = green;
+	    RYR,RZR: left_light = yellow;
+	    RRG:     ns_light   = green;
+	    RRY,RRZ: ns_light   = yellow;
     endcase
   end
 
